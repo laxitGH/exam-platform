@@ -162,8 +162,6 @@ def run_from_state() -> None:
         func()
 
 
-# ----------------------------- Exam simulation helpers ----------------------------- #
-
 def _score_submission(paper: Paper, question: Question, options_chosen: List[str]) -> Tuple[int, int]:
     """Mirror API scoring: returns (score, max_score) for this question in paper."""
     by_code = {opt.code: opt for opt in question.question_options}
@@ -197,14 +195,43 @@ def _score_submission(paper: Paper, question: Question, options_chosen: List[str
     return (0, 0)
 
 
-def _random_choices_for_question(question: Question) -> List[str]:
-    """Pick random options for a question (may be right or wrong)."""
+def _strategy_choices(question: Question, strategy: str) -> List[str]:
+    """Deterministic choice generator to enforce ranking order across users.
+
+    Strategies:
+    - top: always choose the correct answer(s)
+    - mid: mostly correct (single: correct 80%; multi: all correct 70% else only correct subset)
+    - low: mostly wrong (single: always wrong; multi: include a wrong option to force negative)
+    """
     codes = [opt.code for opt in question.question_options]
-    if str(question.type) == QuestionType.SINGLE_CORRECT.value:
-        return [random.choice(codes)]
-    # multiple-correct: choose 1..len(codes)
-    k = random.randint(1, len(codes))
-    return random.sample(codes, k=k)
+    correct_codes = [opt.code for opt in question.question_options if getattr(opt, "correct", False)]
+    wrong_codes = [c for c in codes if c not in correct_codes]
+
+    qtype = str(question.type)
+    if strategy == "top":
+        if qtype == QuestionType.SINGLE_CORRECT.value:
+            return [correct_codes[0]] if correct_codes else [random.choice(codes)]
+        return list(correct_codes) if correct_codes else random.sample(codes, k=max(1, len(codes)//2))
+
+    if strategy == "mid":
+        if qtype == QuestionType.SINGLE_CORRECT.value:
+            return [correct_codes[0]] if correct_codes and random.random() < 0.8 else [random.choice(wrong_codes or codes)]
+        # multi: prefer only correct subset to get positive but < full marks
+        if correct_codes:
+            k = max(1, len(correct_codes) - 1)  # leave one correct out to reduce score
+            return random.sample(correct_codes, k=k)
+        return random.sample(codes, k=1)
+
+    # low strategy
+    if qtype == QuestionType.SINGLE_CORRECT.value:
+        return [random.choice(wrong_codes or codes)]
+    # multi: force negative by including a wrong option (and maybe some corrects)
+    pick = []
+    if correct_codes:
+        pick.append(random.choice(correct_codes))
+    if wrong_codes:
+        pick.append(random.choice(wrong_codes))
+    return pick or [random.choice(codes)]
 
 
 def simulate_exam_for_dummy_users(exam_id: str) -> dict:
@@ -222,10 +249,18 @@ def simulate_exam_for_dummy_users(exam_id: str) -> dict:
         raise ValueError("Not enough users to simulate")
 
     results: dict[str, str] = {}
-    for user in users:
+    for idx, user in enumerate(users):
         # Enroll if missing
         attempt: TestAttempt | None = TestAttempt.objects(exam=exam, user=user).first()
         if not attempt:
+            # Pre-initialize subject buckets to satisfy non-empty constraint
+            initial_subject_scores = [
+                TestSubjectScore(
+                    total_score=0,
+                    subject_code=ps.subject_code,
+                    max_total_score=int(ps.max_score or 0),
+                ) for ps in (paper.subject_max_scores or [])
+            ]
             attempt = TestAttempt(
                 exam=exam,
                 paper=paper,
@@ -233,6 +268,7 @@ def simulate_exam_for_dummy_users(exam_id: str) -> dict:
                 type=TestType.COMPETITIVE.value,
                 status=TestStatus.NOT_STARTED.value,
                 enrolled_on=datetime.now(timezone.utc),
+                subject_scores=initial_subject_scores,
             )
             attempt.save()
 
@@ -244,14 +280,17 @@ def simulate_exam_for_dummy_users(exam_id: str) -> dict:
         # Answer all questions in order with random choices
         for pq in sorted(paper.paper_questions, key=lambda x: x.order):
             question: Question = pq.question
-            choices = _random_choices_for_question(question)
+            # Enforce ranking order: user index 2 > 0 > 1
+            strategy = "top" if idx == 2 else ("mid" if idx == 0 else "low")
+            choices = _strategy_choices(question, strategy)
             score, max_score = _score_submission(paper, question, choices)
             sub = Submission(
                 score=int(score),
                 user=user,
+                paper=paper,
                 question=question,
-                max_score=int(max_score),
                 test_attempt=attempt,
+                max_score=int(max_score),
                 options_chosen=choices,
                 subject_code=str(question.subject_code),
             )

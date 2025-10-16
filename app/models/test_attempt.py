@@ -67,7 +67,11 @@ class TestAttempt(BaseDocument):
     meta = {
         "collection": "test_attempts",
         "indexes": [
-            {"fields": ["exam", "user"], "unique": True, "partialFilterExpression": {"exam": {"$exists": True}}},
-            {"fields": ["paper", "user", "started_on"]},
+            {"fields": ["exam", "user"], "unique": True, "partialFilterExpression": {"exam": {"$exists": True}}, "background": True},
+            {"fields": ["paper", "user", "started_on"], "background": True},
+            {"fields": ["exam", "status"], "background": True},
+            {"fields": ["exam", "rank"], "background": True},
+            {"fields": ["exam", "-total_score", "id"], "background": True},
+            {"fields": ["exam", "subject_scores.subject_code", "subject_scores.rank"], "background": True},
         ],
     }

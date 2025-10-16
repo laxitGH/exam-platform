@@ -180,6 +180,7 @@ def submit_answer(
     # Record immutable submission; unique index prevents duplicates
     submission = Submission(
         score=score,
+        paper=paper,
         user=current_user,
         question=question,
         max_score=max_score,

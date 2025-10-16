@@ -66,16 +66,22 @@ def _ensure_questions() -> tuple[list[Question], list[Question]]:
         q = Question.objects(code=code).first()
         if not q:
             opts = []
-            # choose 2-3 correct options, weights sum to 100
+            # choose 2-3 correct options, weights must sum to exactly 100
             num_correct = random.choice([2, 3])
             corrects = set(random.sample(range(4), k=num_correct))
-            # simple even split of weight among corrects
-            per = 100 // len(corrects)
+            correct_idxs = sorted(corrects)
+            base = 100 // len(correct_idxs)
+            rem = 100 - base * len(correct_idxs)
             for idx in range(4):
+                is_correct = idx in corrects
+                weight = 0
+                if is_correct:
+                    # Give remainder to the last correct idx to make sum exactly 100
+                    weight = base + (rem if idx == correct_idxs[-1] else 0)
                 opts.append(QuestionOption(
-                    correct=(idx in corrects),
+                    correct=is_correct,
                     order=idx,
-                    weight=per if idx in corrects else 0,
+                    weight=weight,
                     type="text",
                     code=f"{code}-O{idx+1}",
                     text=f"Option {idx+1} for {code}",
@@ -119,14 +125,16 @@ def _ensure_papers(singles: list[Question], multis: list[Question]) -> list[Pape
             for pqe in pq:
                 total_max += int(pqe.positive_score or 0)
                 subj = str(pqe.question.subject_code)
-                subject_max[subj] = int(subject_max.get(subj, 0)) + int(pqe.positive_score or 0)
+                subject_max[subj] = int(subject_max.get(
+                    subj, 0)) + int(pqe.positive_score or 0)
 
             p = Paper(
                 name=f"Mock Paper {i}",
                 code=code,
                 type=PaperType.MOCK.value,
                 max_score=int(total_max),
-                subject_max_scores=[PaperSubjectMaxScore(subject_code=k, max_score=v) for k, v in subject_max.items()],
+                subject_max_scores=[PaperSubjectMaxScore(
+                    subject_code=k, max_score=v) for k, v in subject_max.items()],
                 duration_minutes=60,
                 paper_questions=pq,
             )
@@ -143,7 +151,8 @@ def _ensure_exams(papers: list[Paper]) -> list[Exam]:
     for idx, paper in enumerate(chosen, start=1):
         start = now + timedelta(days=idx, hours=9)
         end = start + timedelta(hours=2)
-        e = Exam.objects(paper=paper, date=start.date(), start_time=start).first()
+        e = Exam.objects(paper=paper, date=start.date(),
+                         start_time=start).first()
         if not e:
             e = Exam(
                 paper=paper,
@@ -185,5 +194,3 @@ def seed() -> None:
 
 if __name__ == "__main__":
     seed()
-
-
