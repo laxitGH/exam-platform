@@ -1,0 +1,16 @@
+{
+  "funcs_to_run": [
+    "login_user"
+  ],
+  "login_user": {
+    "input": {
+      "email": "simuser_1760554446@example.com",
+      "password": "Secret123!"
+    },
+    "output": {
+      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2OGVmZWRjZmM0MzRkNWNkZTAzZjY0MGYiLCJpYXQiOjE3NjA1NTQ3NzgsImV4cCI6MTc2MDU1NDgzOCwidHYiOiIxIiwidHlwIjoiYWNjZXNzIn0.7aHRMyxODa8hSqwOYqAMJcHaCdT5C8_mQbPBY2Vpmv4",
+      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2OGVmZWRjZmM0MzRkNWNkZTAzZjY0MGYiLCJpYXQiOjE3NjA1NTQ3NzgsImV4cCI6MTc2MTE1OTU3OCwidHYiOiIxIiwidHlwIjoicmVmcmVzaCJ9.ujtn-V-1lV4VncRdFijGLnZyGJVgfa_S5YfN8gx1NTk",
+      "token_type": "bearer"
+    }
+  }
+}
